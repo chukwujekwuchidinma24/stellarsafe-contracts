@@ -54,6 +54,45 @@ fn month_windows_are_sequential() {
 }
 
 #[test]
+fn quarter_windows_change_exactly_at_each_quarter_start() {
+    // (first second of the quarter, expected quarter index 0..=3), all 2026 UTC.
+    let starts = [
+        (1_767_225_600, 0), // 2026-01-01T00:00:00Z
+        (1_775_001_600, 1), // 2026-04-01T00:00:00Z
+        (1_782_864_000, 2), // 2026-07-01T00:00:00Z
+        (1_790_812_800, 3), // 2026-10-01T00:00:00Z
+    ];
+    for (start, q) in starts {
+        let w = window_id(&Period::CalendarQuarter, start);
+        assert_eq!(w, 2026 * 4 + q, "start of Q{}", q + 1);
+        assert_eq!(
+            window_id(&Period::CalendarQuarter, start - 1),
+            w - 1,
+            "last second before Q{}",
+            q + 1
+        );
+    }
+}
+
+#[test]
+fn quarter_window_is_stable_inside_a_quarter() {
+    // Month boundaries inside Q4 2026 don't change the window.
+    let q4 = window_id(&Period::CalendarQuarter, 1_790_812_800); // Oct 1
+    assert_eq!(window_id(&Period::CalendarQuarter, 1_793_491_199), q4); // Oct 31 23:59:59
+    assert_eq!(window_id(&Period::CalendarQuarter, 1_793_491_200), q4); // Nov 1
+    assert_eq!(window_id(&Period::CalendarQuarter, 1_798_761_599), q4); // Dec 31 23:59:59
+}
+
+#[test]
+fn quarter_windows_roll_over_year_end() {
+    let q4_2026 = window_id(&Period::CalendarQuarter, 1_798_761_599); // 2026-12-31T23:59:59Z
+    let q1_2027 = window_id(&Period::CalendarQuarter, 1_798_761_600); // 2027-01-01T00:00:00Z
+    assert_eq!(q4_2026, 2026 * 4 + 3);
+    assert_eq!(q1_2027, 2027 * 4);
+    assert_eq!(q1_2027, q4_2026 + 1);
+}
+
+#[test]
 fn fixed_windows_align_to_epoch() {
     assert_eq!(window_id(&Period::Fixed(86_400), 0), 0);
     assert_eq!(window_id(&Period::Fixed(86_400), 86_399), 0);
@@ -93,10 +132,12 @@ fn tier_lookup_picks_highest_matching_tier() {
 fn budget_validation() {
     let ok = |limit, period| validate_budget(&Budget { limit, period }).is_ok();
     assert!(ok(1, Period::CalendarMonth));
+    assert!(ok(1, Period::CalendarQuarter));
     assert!(ok(1, Period::Fixed(3_600)));
     assert!(ok(1, Period::Fixed(366 * 86_400)));
     assert!(!ok(0, Period::CalendarMonth));
     assert!(!ok(-5, Period::CalendarMonth));
+    assert!(!ok(0, Period::CalendarQuarter));
     assert!(!ok(1, Period::Fixed(0)));
     assert!(!ok(1, Period::Fixed(3_599)));
     assert!(!ok(1, Period::Fixed(366 * 86_400 + 1)));

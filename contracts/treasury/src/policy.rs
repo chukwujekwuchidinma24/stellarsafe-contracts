@@ -67,6 +67,7 @@ pub fn validate_budget(budget: &Budget) -> Result<(), Error> {
 ///
 /// * `CalendarMonth`: `year * 12 + (month - 1)` in UTC.
 /// * `Fixed(len)`: `timestamp / len`.
+/// * `CalendarQuarter`: `year * 4 + (month - 1) / 3` in UTC.
 pub fn window_id(period: &Period, timestamp: u64) -> u64 {
     match period {
         Period::CalendarMonth => {
@@ -74,6 +75,10 @@ pub fn window_id(period: &Period, timestamp: u64) -> u64 {
             year * 12 + (month - 1)
         }
         Period::Fixed(len) => timestamp / len,
+        Period::CalendarQuarter => {
+            let (year, month, _) = civil_from_days(timestamp / 86_400);
+            year * 4 + (month - 1) / 3
+        }
     }
 }
 

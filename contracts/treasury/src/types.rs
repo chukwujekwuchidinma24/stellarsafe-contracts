@@ -80,6 +80,10 @@ pub enum Period {
     /// Consecutive windows of this many seconds, aligned to the Unix epoch.
     /// `86400` gives UTC days; `604800` gives weeks starting Thursday 00:00 UTC.
     Fixed(u64),
+    /// Calendar quarter in UTC: January, April, July and October 1st 00:00:00Z
+    /// start a new window (e.g. 2026-10-01T00:00:00Z .. 2027-01-01T00:00:00Z).
+    /// Appended last: variant order is part of the ABI.
+    CalendarQuarter,
 }
 
 /// Spending limit for one (department, token) pair.
