@@ -61,6 +61,46 @@ fn monthly_budget_rolls_over_year_end() {
 }
 
 #[test]
+fn quarterly_budget_resets_exactly_at_2027_01_01() {
+    let f = Fixture::new();
+    // OCT_15 is in Q4 2026.
+    f.govern(Action::SetBudget(
+        OPS,
+        f.usdc.clone(),
+        Budget {
+            limit: 8_000,
+            period: Period::CalendarQuarter,
+        },
+    ));
+    f.pay(5_000, OPS);
+
+    // A month boundary inside the quarter does not reset the counter.
+    f.set_time(NOV_1);
+    f.pay(3_000, OPS);
+    let status = f.client.get_budget(&OPS, &f.usdc).unwrap();
+    assert_eq!(status.spent, 8_000);
+    assert_eq!(status.remaining, 0);
+
+    // Still blocked on the last second of the quarter.
+    f.set_time(DEC_31_LAST_SECOND);
+    let id = f.propose_pay(1, OPS);
+    f.client.approve(&f.alice, &id);
+    assert_contract_err!(f.client.try_execute(&f.dave, &id), Error::BudgetExceeded);
+
+    // Resets at 2027-01-01T00:00:00Z.
+    f.set_time(JAN_1_2027);
+    f.client.execute(&f.dave, &id);
+    let status = f.client.get_budget(&OPS, &f.usdc).unwrap();
+    assert_eq!(status.spent, 1);
+    assert_eq!(status.remaining, 7_999);
+    assert_eq!(status.window, 2027 * 4);
+    assert_eq!(
+        status.window,
+        window_id(&Period::CalendarQuarter, JAN_1_2027)
+    );
+}
+
+#[test]
 fn fixed_daily_budget_resets_each_utc_day() {
     let f = Fixture::new();
     f.pay(300, MARKETING);

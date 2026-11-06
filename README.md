@@ -6,7 +6,7 @@ StellarSafe lets an organization hold assets in a contract that **only pays out 
 
 - Payments of 500 USDC or more need two approvals (amount-based approval tiers, per asset).
 - Only allowlisted addresses can receive treasury payments.
-- Each department has a spending limit per UTC calendar month (or a fixed window).
+- Each department has a spending limit per UTC calendar month, UTC calendar quarter, or fixed window.
 - Proposals expire, and approvals given before a relevant rule change stop counting.
 - Configuration changes wait out a timelock, during which a guardian can veto them.
 - Every payment and configuration change emits an on-chain event.
@@ -28,7 +28,7 @@ StellarSafe works one level higher. It is a **treasury workflow engine**: paymen
 | | Signing-level policies (e.g. OZ smart accounts) | StellarSafe |
 |---|---|---|
 | Approvals | Signatures on a single transaction | On-chain proposals approved asynchronously, with expiry, revocation and an audit trail |
-| Spending limits | Rolling window measured in ledgers, per signing rule | Per **department** and token, by **UTC calendar month** (or fixed window); predictable for accounting |
+| Spending limits | Rolling window measured in ledgers, per signing rule | Per **department** and token, by **UTC calendar month or quarter** (or fixed window); predictable for accounting |
 | Amount-based thresholds | Configure separate rules | Built-in approval tiers per asset (e.g. ≥ 500 USDC → 2 approvals) |
 | Recipient control | – | Allowlist, checked again at execution |
 | Rule changes | Thresholds can become unreachable when signers change; admins must fix them by hand | Invariants enforced on every change; affected approvals reset automatically |
@@ -132,12 +132,14 @@ The highest tier whose `min_amount <= amount` applies. Tiers must start at 0, in
 ```rust
 Budget { limit: 5000_0000000, period: Period::CalendarMonth }
 Budget { limit:  300_0000000, period: Period::Fixed(86_400) }   // per UTC day
+Budget { limit: 15000_0000000, period: Period::CalendarQuarter }
 ```
 
 Departments are `u32` ids. Names live off-chain. Every payment names a department, and a department with no budget for the token cannot spend it.
 
 - `CalendarMonth`: UTC months computed on-chain from the ledger timestamp, e.g. `2026-10-01T00:00:00Z` up to but not including `2026-11-01T00:00:00Z`. Leap years are handled.
 - `Fixed(seconds)`: back-to-back windows aligned to the Unix epoch (1 hour to 366 days).
+- `CalendarQuarter`: UTC quarters starting on January 1, April 1, July 1 and October 1, e.g. `2026-10-01T00:00:00Z` up to but not including `2027-01-01T00:00:00Z`. The window id is `year * 4 + (month - 1) / 3`.
 
 Spending is counted **in contract storage when a payment executes**, never by the backend. Only the current window's counter is kept, and it resets when the window changes. Counters live in persistent storage. That storage gets archived and can be restored, but it is never deleted, so letting an entry expire cannot reset the count. Removing and re-adding a budget within the same window keeps the amount already spent.
 
@@ -203,7 +205,7 @@ What the tests cover:
 | Payments | tier boundaries (499/500/4,999/5,000), cap, allowlist, fail-closed asset and budget, self-payment, insufficient balance reverts cleanly |
 | Approvals | duplicates, revocation, expiry boundary (`expires_at` is exclusive), per-token and governance epochs, unrelated changes keep approvals, removed or demoted approvers |
 | Timelock | delay boundary to the second, timer restarts when approvals drop below threshold or the epoch changes, changing the delay is itself delayed, guardian veto and its limits, TTL must outlive the delay |
-| Budgets | accumulation, check at execution time not proposal time, exact UTC month and year rollover, daily windows, per-department isolation, remove/re-add keeps spend |
+| Budgets | accumulation, check at execution time not proposal time, exact UTC month, quarter and year rollover, daily windows, per-department isolation, remove/re-add keeps spend |
 | Governance | each action, threshold bounds, invariant violations rejected, failed execution reverts fully, upgrade |
 | Independent execution | off by default, applies to payments and governance, stale/revoked approvals don't block, invariant keeps an eligible executor |
 | Maintenance | pruning retention boundary (executed, cancelled, expired), all-or-nothing batches, pruned ids rejected and never reused, writes blocked until `migrate`, downgrade doesn't brick governance |
