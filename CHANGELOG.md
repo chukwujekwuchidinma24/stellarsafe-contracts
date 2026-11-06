@@ -3,6 +3,7 @@
 ## [0.1.0] - Unreleased
 
 ### Added
+- `Period::CalendarQuarter`: department budgets that reset at the start of each UTC calendar quarter.
 - `prune_proposals(ids)`: anyone can delete proposals closed for at least 30 days (`PROPOSAL_RETENTION`); `proposal_pruned` event; error `ProposalNotPrunable` (308).
 - Optional independent execution (`SetIndependentExecutor`, view `independent_executor`): nobody can execute a proposal their own approval counts on. Errors `NoIndependentExecutor` (113) and `ExecutorApproved` (309).
 - Approvals that would start a governance timelock ending at or after expiry are rejected; `get_proposal_state` reports it. Error `TimelockOutlivesProposal` (310).
